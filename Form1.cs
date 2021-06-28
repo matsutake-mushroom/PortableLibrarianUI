@@ -9,18 +9,16 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.Threading;
+using System.IO;
 
 namespace ローカル司書さん
 {
     public partial class Form1 : Form
     {
-        private Process process;
-        private ProcessStartInfo startinfo;
-
+        private Subprocess process;
         public Form1()
         {
             InitializeComponent();
-
         }
 
         private void listBox1_DragDrop(object sender, DragEventArgs e)
@@ -92,87 +90,91 @@ namespace ローカル司書さん
                 {
                     throw new Exception("同じ列を参照しています。");
                 }
-                if(port < 0 || port > 65535)
+                if (port < 0 || port > 65535)
                 {
                     throw new Exception("不正なポート番号です。");
                 }
             }
-            catch(Exception err)
+            catch (Exception err)
             {
                 MessageBox.Show(err.Message);
                 return;
             }
             //morph button exec -> stop
-            button_exec.Text = "実行中";
-            button_exec.Enabled = false;
-            button_stop.Enabled = true;
+            progressBar1.Maximum = 100;
+            progressBar1.Value = 5;
+            setButtonsExecuting(true);
 
             listBox2.Items.Add("サーバーアプリケーションを起動しています…");
 
-            //create thread (stdout redirect and show)
-            startinfo = new ProcessStartInfo(@"\\fileserver18\users\t.matsutake\private\workspace\pyinst_test\dist\hello_flask\hello_flask.exe", $"{col_q} {col_a} {port} {filenames}")
+            //process = new Subprocess(@"\\fileserver18\users\t.matsutake\private\workspace\pyinst_test\dist\hello_flask\hello_flask.exe", $"{col_q} {col_a} {port} {filenames}");
+            process = new Subprocess("python", @"C:\Users\tm314\Workspace\debug.py");
+
+            //start process
+            var isStarted = false;
+            try
             {
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false
-            };
-
-            listBox2.Items.Add($"{startinfo.FileName} {startinfo.Arguments}");
-
-
-            using (process = new Process())
-            using (var ctoken = new CancellationTokenSource())
+                isStarted = process.Start();
+            }
+            catch(Exception ex)
             {
-                process.StartInfo = startinfo;
-                process.EnableRaisingEvents = true;
-                
-                // コールバックの設定
-                process.Exited += (sdr, ev) =>
-                {
-                    this.Invoke(new Action(() => { listBox2.Items.Add("プロセスが終了しました。"); }));
-                    // プロセスが終了すると呼ばれる
-                    ctoken.Cancel();
-                };
+                listBox2.Items.Add(ex.Message);
+            }
 
-                // プロセスの開始
-                var result = process.Start();
-                if (!result)
-                {
-                    MessageBox.Show("起動失敗？");
-                }
-
-                progressBar1.Maximum = 100;
-                progressBar1.Value = 10;
-
-                Task.Run(() =>
-                {
+            //process started?
+            if (isStarted)
+            {
+                progressBar1.Value = 5;
+                listBox2.Items.Add("起動に成功しました。");
+            }
+            else
+            {
+                progressBar1.Value = 0;
+                listBox2.Items.Add("起動に失敗しました。");
+                setButtonsExecuting(false);
+                return;
+            }
+            //Taskでバッファを書き込む
+            Task.Run(() =>
+            {
+                ref MemoryStream ms = ref process.outputBuffer();
+                byte[] buffer = new byte[256];
+                string result = System.Text.Encoding.UTF8.GetString(buffer);
+                using (var reader = new StreamReader(ms)) {
                     while (true)
                     {
-                        var l = process.StandardOutput.ReadLine();
-                        if (l == null)
+                        try
                         {
-                            break;
+                            if (!ms.CanRead)
+                            {
+                                return;
+                            }
+                            var line = reader.ReadLine();
+                            
+                            if (line != null)
+                            {
+                                Console.WriteLine("READTASK: " + line);
+                                Invoke(new Action(() => { listBox2.Items.Add(line); }));
+                            }
+                           
                         }
-                        Invoke(new Action(() => { listBox2.Items.Add(l); }));
-                        Invoke(new Action(() => { progressBar1.Value += 1; }));
-                        Console.WriteLine($"stdout = {l}");
+                        catch(Exception ex)
+                        {
+                            Invoke(new Action(() => { listBox2.Items.Add(ex.Message); }));
+                            return;
+                        }
                     }
-                });
-                Task.Run(() =>
-                {
-                    ctoken.Token.WaitHandle.WaitOne();
-                    process.WaitForExit();
-                });
-                Task.Run(() =>
-                {
-                    Console.WriteLine("Task3 started");
+                }
+            });
+
+
+            //ロード中、無意味にprogressバーを増やす
+            Task.Run(() => {
                     var timer = new System.Timers.Timer();
                     timer.Elapsed += new System.Timers.ElapsedEventHandler((obj, args) =>
                     {
-                        Console.WriteLine("Tick");
                         Invoke(new Action(() => { progressBar1.Value += 1; }));
-                        if(progressBar1.Value == 80)
+                        if (progressBar1.Value <= 80)
                         {
                             timer.Stop();
                         }
@@ -180,23 +182,31 @@ namespace ローカル司書さん
                     timer.Interval = 1000;
                     timer.Enabled = true;
                     timer.Start();
-                    Console.WriteLine("timer started");
-
-                });
-
-            }
-
-
-
-
+            });
         }
 
         private void button_stop_Click(object sender, EventArgs e)
         {
-            button_exec.Text = "実行";
-            button_exec.Enabled = true;
-            button_stop.Enabled = false;
+            listBox2.Items.Add("サーバーアプリケーションを終了しています…");
+            setButtonsExecuting(false);
             process.Close();
+            listBox2.Items.Add("終了しました。");
+        }
+
+        private void setButtonsExecuting(bool on)
+        {
+            if (on)
+            {
+                button_exec.Text = "実行中";
+                button_exec.Enabled = false;
+                button_stop.Enabled = true;
+            }
+            else
+            {
+                button_exec.Text = "実行";
+                button_exec.Enabled = true;
+                button_stop.Enabled = false;
+            }
         }
     }
 }
