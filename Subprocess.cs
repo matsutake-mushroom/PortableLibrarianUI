@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using System.Management;
 
 namespace ローカル司書さん
 {
     public class Subprocess
     {
+        public int statusCode = 0;
         private Process process;
         private ProcessStartInfo startinfo;
         private MemoryStream stream;
@@ -30,7 +32,17 @@ namespace ローカル司書さん
             process.StartInfo.RedirectStandardError = true;
 
             process.StartInfo.FileName = filename;
+            process.StartInfo.WorkingDirectory = Path.GetDirectoryName(filename);
             process.StartInfo.Arguments = arguments;
+
+            process.Exited += new EventHandler((obj, trg) =>
+            {
+                statusCode = -1;
+            });
+        }
+        public int processId()
+        {
+            return process.Id;
         }
 
         public bool Start()
@@ -60,10 +72,54 @@ namespace ローカル司書さん
 
         public void Close()
         {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    Console.WriteLine("Killing process: " + process.Id);
+                    KillProcessIncludingChildren(process.Id);
+                    process.WaitForExit(10000);
+                }
+            }
+            catch
+            {
+                ;//Closeが成功していた場合
+            }
             standardOutput.Close();
             standardError.Close();
 
-            process.Close();
+            //process.Close();
+        }
+
+        private static bool KillProcessIncludingChildren(int pid)
+        {
+            if (pid == 0)
+            {
+                return false;
+            }
+
+            bool ret = true;
+            var searcher = new ManagementObjectSearcher("Select * From Win32_Process Where ParentProcessID=" + pid);
+            foreach(var obj in searcher.Get())
+            {
+                ret &= KillProcessIncludingChildren(Convert.ToInt32(obj["ProcessId"]));
+            }
+
+            try
+            {
+                var p = Process.GetProcessById(pid);
+                p.Kill();
+            }
+            catch (ArgumentException)
+            {
+                ;//already exited
+            }
+            catch
+            {
+                return false;
+            }
+
+            return ret;
         }
     }
 
@@ -93,30 +149,41 @@ namespace ローカル司書さん
 
         private void readtask()
         {
-            while (true)
+            try
             {
-                int current;
-
-                if (token.IsCancellationRequested)
+                while (true)
                 {
-                    return;
-                }
+                    int current;
 
-                writer.AutoFlush = false;
-                while ((current = reader.Read()) >= 0)
-                {
-                    isIdle = false;
-                    writer.Write((char)current);
-                    Console.Write((char)current);
-                    
-                    
-                    if((char)current == '\n')
+                    if (token.IsCancellationRequested)
                     {
-                        writer.Flush();
+                        return;
                     }
-                    
+
+                    writer.AutoFlush = false;
+                    while ((current = reader.Read()) >= 0)
+                    {
+                        isIdle = false;
+                        writer.Write((char)current);
+                        Console.Write((char)current);
+
+
+                        if ((char)current == '\n')
+                        {
+                            writer.Flush();
+                        }
+
+                        if (token.IsCancellationRequested || reader == null)
+                        {
+                            return;
+                        }
+
+                    }
+                    isIdle = true;
                 }
-                isIdle = true;
+            }catch(Exception ex)
+            {
+                ;//
             }
         }
 
@@ -124,11 +191,22 @@ namespace ローカル司書さん
         {
             if (!readTask.IsCompleted)
             {
+                var counter = 0;
                 tokenSource.Cancel();
-                while (true){
-                    if (readTask.IsCanceled || readTask.IsCompleted)
+                while (true)
+                {
+                    if (readTask.IsCanceled || readTask.IsCompleted || readTask.IsFaulted　)
                     {
                         readTask.Dispose();
+                        break;
+                    }
+                    if (!tokenSource.IsCancellationRequested)
+                    {
+                        tokenSource.Cancel();
+                    }
+                    counter++;
+                    if(counter > 1000000)
+                    {
                         break;
                     }
                 }
@@ -136,8 +214,23 @@ namespace ローカル司書さん
             else{
                 readTask.Dispose();
             }
-            writer.Close();
-            reader.Close();     
+
+            try
+            {
+                writer.Close();
+            }
+            catch
+            {
+                ;//もう閉じている場合
+            }
+            try
+            {
+                reader.Close();
+            }
+            catch
+            {
+                ;//もう閉じている場合
+            }
         }
         public bool IsIdle()
         {

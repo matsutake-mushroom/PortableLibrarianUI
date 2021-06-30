@@ -10,6 +10,8 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.Threading;
 using System.IO;
+using System.Net;
+using System.Net.NetworkInformation;
 
 namespace ローカル司書さん
 {
@@ -94,6 +96,15 @@ namespace ローカル司書さん
                 {
                     throw new Exception("不正なポート番号です。");
                 }
+                foreach(var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())
+                {
+                    if(endpoint.Port == port)
+                    {
+                        //使用中
+                        throw new Exception("ポートは既に使用されています。違う番号を指定してください。");
+                    }
+                }
+
             }
             catch (Exception err)
             {
@@ -106,9 +117,9 @@ namespace ローカル司書さん
             setButtonsExecuting(true);
 
             listBox2.Items.Add("サーバーアプリケーションを起動しています…");
-
+            process = new Subprocess(textBox_execPath.Text, $"{col_q} {col_a} {port} {filenames}");
             //process = new Subprocess(@"\\fileserver18\users\t.matsutake\private\workspace\pyinst_test\dist\hello_flask\hello_flask.exe", $"{col_q} {col_a} {port} {filenames}");
-            process = new Subprocess("python", @"C:\Users\tm314\Workspace\debug.py");
+            //process = new Subprocess("python", @"C:\Users\tm314\Workspace\debug.py");
 
             //start process
             var isStarted = false;
@@ -167,29 +178,37 @@ namespace ローカル司書さん
                 }
             });
 
-
-            //ロード中、無意味にprogressバーを増やす
-            Task.Run(() => {
+            progressBar1.Style = ProgressBarStyle.Marquee;
+            //ロード中、無意味にprogressバーを増やす + 異常終了を検知する
+            /*Task.Run(() => {
                     var timer = new System.Timers.Timer();
                     timer.Elapsed += new System.Timers.ElapsedEventHandler((obj, args) =>
                     {
                         Invoke(new Action(() => { progressBar1.Value += 1; }));
-                        if (progressBar1.Value <= 80)
+                        if (progressBar1.Value >= 80)
                         {
                             timer.Stop();
+                        }
+                        if(process.statusCode < 0)
+                        {
+                            Invoke(new Action(() => { listBox2.Items.Add("異常終了"); }));
                         }
                     });
                     timer.Interval = 1000;
                     timer.Enabled = true;
                     timer.Start();
-            });
+            });*/
         }
 
         private void button_stop_Click(object sender, EventArgs e)
         {
-            listBox2.Items.Add("サーバーアプリケーションを終了しています…");
+            listBox2.Items.Add("サーバーアプリケーションを終了しています…(1分程度かかる場合があります)");
+            Task.Delay(100);
             setButtonsExecuting(false);
+            Task.Delay(100);
             process.Close();
+            progressBar1.Style = ProgressBarStyle.Continuous;
+            progressBar1.Value = 0;
             listBox2.Items.Add("終了しました。");
         }
 
@@ -206,6 +225,18 @@ namespace ローカル司書さん
                 button_exec.Text = "実行";
                 button_exec.Enabled = true;
                 button_stop.Enabled = false;
+            }
+        }
+
+        private void Form1_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            try
+            {
+                process.Close();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);//ない場合は何もしない
             }
         }
     }

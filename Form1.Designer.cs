@@ -30,10 +30,13 @@
         {
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.button_stop = new System.Windows.Forms.Button();
+            this.textBox_execPath = new System.Windows.Forms.TextBox();
             this.textBox_port = new System.Windows.Forms.TextBox();
             this.textBox_col_answer = new System.Windows.Forms.TextBox();
             this.textBox_col_question = new System.Windows.Forms.TextBox();
             this.label4 = new System.Windows.Forms.Label();
+            this.label9 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
             this.label7 = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
@@ -51,7 +54,6 @@
             this.listBox2 = new System.Windows.Forms.ListBox();
             this.label8 = new System.Windows.Forms.Label();
             this.progressBar1 = new System.Windows.Forms.ProgressBar();
-            this.button_stop = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             this.menuStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -71,10 +73,12 @@
             // groupBox1
             // 
             this.groupBox1.Controls.Add(this.button_stop);
+            this.groupBox1.Controls.Add(this.textBox_execPath);
             this.groupBox1.Controls.Add(this.textBox_port);
             this.groupBox1.Controls.Add(this.textBox_col_answer);
             this.groupBox1.Controls.Add(this.textBox_col_question);
             this.groupBox1.Controls.Add(this.label4);
+            this.groupBox1.Controls.Add(this.label9);
             this.groupBox1.Controls.Add(this.label3);
             this.groupBox1.Controls.Add(this.label7);
             this.groupBox1.Controls.Add(this.label6);
@@ -93,9 +97,28 @@
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "データ設定";
             // 
+            // button_stop
+            // 
+            this.button_stop.Enabled = false;
+            this.button_stop.Location = new System.Drawing.Point(544, 201);
+            this.button_stop.Name = "button_stop";
+            this.button_stop.Size = new System.Drawing.Size(102, 40);
+            this.button_stop.TabIndex = 4;
+            this.button_stop.Text = "停止";
+            this.button_stop.UseVisualStyleBackColor = true;
+            this.button_stop.Click += new System.EventHandler(this.button_stop_Click);
+            // 
+            // textBox_execPath
+            // 
+            this.textBox_execPath.Location = new System.Drawing.Point(159, 212);
+            this.textBox_execPath.Name = "textBox_execPath";
+            this.textBox_execPath.Size = new System.Drawing.Size(379, 19);
+            this.textBox_execPath.TabIndex = 3;
+            this.textBox_execPath.Text = ".\\App\\main.exe";
+            // 
             // textBox_port
             // 
-            this.textBox_port.Location = new System.Drawing.Point(136, 215);
+            this.textBox_port.Location = new System.Drawing.Point(136, 185);
             this.textBox_port.Name = "textBox_port";
             this.textBox_port.Size = new System.Drawing.Size(63, 19);
             this.textBox_port.TabIndex = 3;
@@ -123,11 +146,20 @@
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(7, 218);
+            this.label4.Location = new System.Drawing.Point(7, 188);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(110, 12);
             this.label4.TabIndex = 2;
             this.label4.Text = "アプリを公開するポート";
+            // 
+            // label9
+            // 
+            this.label9.AutoSize = true;
+            this.label9.Location = new System.Drawing.Point(7, 215);
+            this.label9.Name = "label9";
+            this.label9.Size = new System.Drawing.Size(146, 12);
+            this.label9.TabIndex = 2;
+            this.label9.Text = "ウェブアプリ(main.exe)へのパス";
             // 
             // label3
             // 
@@ -141,7 +173,7 @@
             // label7
             // 
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(205, 218);
+            this.label7.Location = new System.Drawing.Point(205, 188);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(45, 12);
             this.label7.TabIndex = 2;
@@ -284,17 +316,6 @@
             this.progressBar1.Size = new System.Drawing.Size(760, 23);
             this.progressBar1.TabIndex = 3;
             // 
-            // button_stop
-            // 
-            this.button_stop.Enabled = false;
-            this.button_stop.Location = new System.Drawing.Point(544, 201);
-            this.button_stop.Name = "button_stop";
-            this.button_stop.Size = new System.Drawing.Size(102, 40);
-            this.button_stop.TabIndex = 4;
-            this.button_stop.Text = "停止";
-            this.button_stop.UseVisualStyleBackColor = true;
-            this.button_stop.Click += new System.EventHandler(this.button_stop_Click);
-            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
@@ -308,6 +329,7 @@
             this.MainMenuStrip = this.menuStrip1;
             this.Name = "Form1";
             this.Text = "ローカル司書（β）";
+            this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.Form1_FormClosed);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
             this.menuStrip1.ResumeLayout(false);
@@ -343,6 +365,8 @@
         private System.Windows.Forms.ProgressBar progressBar1;
         private System.Windows.Forms.Button button_exec;
         private System.Windows.Forms.Button button_stop;
+        private System.Windows.Forms.TextBox textBox_execPath;
+        private System.Windows.Forms.Label label9;
     }
 }
 
