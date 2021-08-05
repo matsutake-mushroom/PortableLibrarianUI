@@ -12,12 +12,13 @@ using System.Threading;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Management;
 
 namespace ローカル司書さん
 {
     public partial class Form1 : Form
     {
-        private Subprocess process;
+        private Process process;
         public Form1()
         {
             InitializeComponent();
@@ -105,6 +106,11 @@ namespace ローカル司書さん
                     }
                 }
 
+                if(listBox1.Items.Count <= 0)
+                {
+                    throw new Exception("CSVファイルを登録してください。");
+                }
+
             }
             catch (Exception err)
             {
@@ -117,99 +123,115 @@ namespace ローカル司書さん
             setButtonsExecuting(true);
 
             listBox2.Items.Add("サーバーアプリケーションを起動しています…");
-            process = new Subprocess(textBox_execPath.Text, $"{col_q} {col_a} {port} {filenames}");
-            //process = new Subprocess(@"\\fileserver18\users\t.matsutake\private\workspace\pyinst_test\dist\hello_flask\hello_flask.exe", $"{col_q} {col_a} {port} {filenames}");
-            //process = new Subprocess("python", @"C:\Users\tm314\Workspace\debug.py");
 
-            //start process
-            var isStarted = false;
+            process = new Process();
+            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.UseShellExecute = false;//リダイレクトするため
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardInput = true;
+            process.StartInfo.RedirectStandardError = true;
+
+            var filename = textBox_execPath.Text;
+            var arguments = $"{col_q} {col_a} {port} {filenames}";
+
+            process.StartInfo.FileName = filename;
+            process.StartInfo.WorkingDirectory = Path.GetDirectoryName(filename);
+            process.StartInfo.Arguments = arguments;
+
+            process.OutputDataReceived += (s, args) => Display(args.Data);
+            process.ErrorDataReceived += (s, args) => Display(args.Data);
             try
             {
-                isStarted = process.Start();
-            }
-            catch(Exception ex)
-            {
-                listBox2.Items.Add(ex.Message);
-            }
+                var isStarted = process.Start();
 
-            //process started?
-            if (isStarted)
-            {
-                progressBar1.Value = 5;
-                listBox2.Items.Add("起動に成功しました。");
-            }
-            else
-            {
-                progressBar1.Value = 0;
-                listBox2.Items.Add("起動に失敗しました。");
-                setButtonsExecuting(false);
-                return;
-            }
-            //Taskでバッファを書き込む
-            Task.Run(() =>
-            {
-                ref MemoryStream ms = ref process.outputBuffer();
-                byte[] buffer = new byte[256];
-                string result = System.Text.Encoding.UTF8.GetString(buffer);
-                using (var reader = new StreamReader(ms)) {
-                    while (true)
-                    {
-                        try
-                        {
-                            if (!ms.CanRead)
-                            {
-                                return;
-                            }
-                            var line = reader.ReadLine();
-                            
-                            if (line != null)
-                            {
-                                Console.WriteLine("READTASK: " + line);
-                                Invoke(new Action(() => { listBox2.Items.Add(line); }));
-                            }
-                           
-                        }
-                        catch(Exception ex)
-                        {
-                            Invoke(new Action(() => { listBox2.Items.Add(ex.Message); }));
-                            return;
-                        }
-                    }
+                if (isStarted)
+                {
+                    progressBar1.Value = 5;
+                    listBox2.Items.Add("起動に成功しました。");
+                    progressBar1.Value = 50;
+                    listBox2.Items.Add("データをメモリにロードしています。１分程度お待ちください。");
+
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
                 }
-            });
+                else
+                {
+                    progressBar1.Value = 0;
+                    listBox2.Items.Add("起動に失敗しました。");
+                    setButtonsExecuting(false);
+                    return;
+                }
+            }
+            catch(Exception ee)
+            {
+                listBox2.Items.Add("エラーが発生しました。");
+                setButtonsExecuting(false);
+                MessageBox.Show(ee.Message);
+            }
+        }
 
-            progressBar1.Style = ProgressBarStyle.Marquee;
-            //ロード中、無意味にprogressバーを増やす + 異常終了を検知する
-            /*Task.Run(() => {
-                    var timer = new System.Timers.Timer();
-                    timer.Elapsed += new System.Timers.ElapsedEventHandler((obj, args) =>
-                    {
-                        Invoke(new Action(() => { progressBar1.Value += 1; }));
-                        if (progressBar1.Value >= 80)
-                        {
-                            timer.Stop();
-                        }
-                        if(process.statusCode < 0)
-                        {
-                            Invoke(new Action(() => { listBox2.Items.Add("異常終了"); }));
-                        }
-                    });
-                    timer.Interval = 1000;
-                    timer.Enabled = true;
-                    timer.Start();
-            });*/
+        private void Display(string output)
+        {
+            try
+            {
+                Invoke((MethodInvoker)(() => { listBox2.Items.Add(output); }));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message + "\nDuring displaying \"" + output + "\"");
+            }
+
         }
 
         private void button_stop_Click(object sender, EventArgs e)
         {
-            listBox2.Items.Add("サーバーアプリケーションを終了しています…(1分程度かかる場合があります)");
-            Task.Delay(100);
-            setButtonsExecuting(false);
-            Task.Delay(100);
-            process.Close();
-            progressBar1.Style = ProgressBarStyle.Continuous;
-            progressBar1.Value = 0;
-            listBox2.Items.Add("終了しました。");
+            if (true)//processの関連付けの判定をしたい
+            {
+                listBox2.Items.Add("サーバーアプリケーションを終了しています…(1分程度かかる場合があります)");
+                Task.Delay(100);
+                setButtonsExecuting(false);
+
+                if (!process.HasExited)
+                {
+                    Console.WriteLine("Killing process: " + process.Id);
+                    KillProcessIncludingChildren(process.Id);
+                    process.WaitForExit(10000);
+                }
+                process.Close();
+                progressBar1.Style = ProgressBarStyle.Continuous;
+                progressBar1.Value = 0;
+                listBox2.Items.Add("終了しました。");
+            }
+        }
+        private static bool KillProcessIncludingChildren(int pid)
+        {
+            if (pid == 0)
+            {
+                return false;
+            }
+
+            bool ret = true;
+            var searcher = new ManagementObjectSearcher("Select * From Win32_Process Where ParentProcessID=" + pid);
+            foreach (var obj in searcher.Get())
+            {
+                ret &= KillProcessIncludingChildren(Convert.ToInt32(obj["ProcessId"]));
+            }
+
+            try
+            {
+                var p = Process.GetProcessById(pid);
+                p.Kill();
+            }
+            catch (ArgumentException)
+            {
+                ;//already exited
+            }
+            catch
+            {
+                return false;
+            }
+
+            return ret;
         }
 
         private void setButtonsExecuting(bool on)
@@ -232,6 +254,12 @@ namespace ローカル司書さん
         {
             try
             {
+                if (!process.HasExited)
+                {
+                    Console.WriteLine("Killing process: " + process.Id);
+                    KillProcessIncludingChildren(process.Id);
+                    process.WaitForExit(10000);
+                }
                 process.Close();
             }
             catch (Exception ex)
